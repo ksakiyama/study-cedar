@@ -30,7 +30,7 @@ func NewAuthorizer() (*Authorizer, error) {
 }
 
 // IsAuthorized checks if a user is authorized to perform an action on a resource
-func (a *Authorizer) IsAuthorized(userID, userRole, action, resourceID, resourceOwnerID string) (bool, error) {
+func (a *Authorizer) IsAuthorized(userID, userRole, action, resourceID, resourceOwnerID, ipAddress string, isPrivateIP, isJapanIP bool) (bool, error) {
 	// Create principal (user)
 	principal := cedar.NewEntityUID(cedar.EntityType("DocumentApp::User"), cedar.String(userID))
 
@@ -63,9 +63,9 @@ func (a *Authorizer) IsAuthorized(userID, userRole, action, resourceID, resource
 			},
 			"attrs": map[string]interface{}{
 				"owner": map[string]string{
-					"type":       "DocumentApp::User",
-					"id":         resourceOwnerID,
-					"__entity":   "true",
+					"type":     "DocumentApp::User",
+					"id":       resourceOwnerID,
+					"__entity": "true",
 				},
 			},
 			"parents": []interface{}{},
@@ -83,12 +83,19 @@ func (a *Authorizer) IsAuthorized(userID, userRole, action, resourceID, resource
 		return false, fmt.Errorf("failed to unmarshal entities: %w", err)
 	}
 
+	// Create context with IP information
+	contextMap := cedar.RecordMap{
+		"ip_address":    cedar.String(ipAddress),
+		"is_private_ip": cedar.Boolean(isPrivateIP),
+		"is_japan_ip":   cedar.Boolean(isJapanIP),
+	}
+
 	// Create request
 	req := cedar.Request{
 		Principal: principal,
 		Action:    actionUID,
 		Resource:  resource,
-		Context:   cedar.NewRecord(cedar.RecordMap{}),
+		Context:   cedar.NewRecord(contextMap),
 	}
 
 	// Evaluate authorization
@@ -104,9 +111,12 @@ type AuthzRequest struct {
 	Action          string
 	ResourceID      string
 	ResourceOwnerID string
+	IPAddress       string
+	IsPrivateIP     bool
+	IsJapanIP       bool
 }
 
 // Authorize is a convenience method for authorization
 func (a *Authorizer) Authorize(req AuthzRequest) (bool, error) {
-	return a.IsAuthorized(req.UserID, req.UserRole, req.Action, req.ResourceID, req.ResourceOwnerID)
+	return a.IsAuthorized(req.UserID, req.UserRole, req.Action, req.ResourceID, req.ResourceOwnerID, req.IPAddress, req.IsPrivateIP, req.IsJapanIP)
 }

@@ -234,6 +234,109 @@ when {
 
 Document owners (creators) can delete their own documents.
 
+### Policy 0: Geographic Restriction (IP-based)
+
+```cedar
+forbid(
+    principal,
+    action,
+    resource
+)
+unless {
+    context.is_japan_ip || context.is_private_ip
+};
+```
+
+This policy enforces geographic restrictions using IP addresses:
+- **Allows**: Requests from Japan IP addresses or private/local IP addresses
+- **Denies**: Requests from non-Japan public IP addresses
+
+The policy uses Cedar's **Context** feature to pass runtime information (IP address classification) to the authorization engine.
+
+## IP-Based Authorization with Context
+
+This project demonstrates Cedar's powerful Context feature for attribute-based access control.
+
+### How It Works
+
+1. **Request Processing**: When a request arrives, the server:
+   - Extracts the client IP address (supports `X-Forwarded-For` and `X-Real-IP` headers)
+   - Classifies the IP address:
+     - `is_private_ip`: Is it a private/local IP? (10.x.x.x, 192.168.x.x, 127.x.x.x, etc.)
+     - `is_japan_ip`: Is it from a Japanese IP range? (NTT, KDDI, SoftBank, AWS Tokyo, etc.)
+
+2. **Cedar Context**: This information is passed to Cedar as **Context**:
+   ```go
+   contextMap := cedar.RecordMap{
+       "ip_address":    cedar.String(ipAddress),
+       "is_private_ip": cedar.Boolean(isPrivateIP),
+       "is_japan_ip":   cedar.Boolean(isJapanIP),
+   }
+   ```
+
+3. **Policy Evaluation**: Cedar evaluates all policies including the geographic restriction policy.
+
+### Context Schema
+
+Context is defined in the Cedar schema (`schema.cedarschema`):
+
+```cedar
+action "ListDocuments", ...
+appliesTo {
+    principal: [User],
+    resource: [Document],
+    context: {
+        "ip_address": String,
+        "is_private_ip": Bool,
+        "is_japan_ip": Bool,
+    }
+};
+```
+
+### Testing IP-Based Authorization
+
+Run the test script to verify IP-based authorization:
+
+```bash
+./test-ip-authorization.sh
+```
+
+The script tests:
+1. Local/Private IP → ✅ Allowed
+2. Non-Japan Public IP (8.8.8.8) → ❌ Denied
+3. Japan IP (1.0.16.1 - NTT) → ✅ Allowed
+4. Private IP (192.168.x.x) → ✅ Allowed
+
+### Manual Testing with curl
+
+```bash
+# Test with local IP (allowed)
+curl -H "X-User-ID: user-1" \
+     -H "X-User-Role: viewer" \
+     http://localhost:8080/api/v1/documents
+
+# Test with non-Japan IP (denied)
+curl -H "X-User-ID: user-1" \
+     -H "X-User-Role: viewer" \
+     -H "X-Forwarded-For: 8.8.8.8" \
+     http://localhost:8080/api/v1/documents
+
+# Test with Japan IP (allowed)
+curl -H "X-User-ID: user-1" \
+     -H "X-User-Role: viewer" \
+     -H "X-Forwarded-For: 1.0.16.1" \
+     http://localhost:8080/api/v1/documents
+```
+
+### Production Considerations
+
+The current implementation uses a simplified list of Japanese IP ranges. For production:
+
+1. **Use GeoIP Database**: Integrate [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) for accurate geolocation
+2. **Update IP Ranges**: Keep the IP range list updated regularly
+3. **Consider Proxies**: Ensure proper handling of proxy headers (`X-Forwarded-For`, `X-Real-IP`)
+4. **VPN Detection**: Consider additional checks for VPN/proxy detection if needed
+
 ## Cedar Learning Points
 
 ### 1. Entities and Actions

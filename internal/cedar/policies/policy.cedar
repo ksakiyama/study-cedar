@@ -1,5 +1,15 @@
 // Cedar Policies for Document Management System
 
+// ポリシー0: 地理的制限 - 日本国内IPまたはプライベートIPのみアクセス許可
+forbid(
+    principal,
+    action,
+    resource
+)
+unless {
+    context.is_japan_ip || context.is_private_ip
+};
+
 // ポリシー1: 管理者は全ての操作が可能
 permit(
     principal,

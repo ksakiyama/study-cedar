@@ -16,5 +16,14 @@ namespace DocumentApp {
            "GetDocument",
            "CreateDocument",
            "UpdateDocument",
-           "DeleteDocument";
+           "DeleteDocument"
+    appliesTo {
+        principal: [User],
+        resource: [Document],
+        context: {
+            "ip_address": String,
+            "is_private_ip": Bool,
+            "is_japan_ip": Bool,
+        }
+    };
 }

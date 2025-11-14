@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/ksakiyama/study-cedar/internal/cedar"
+	"github.com/ksakiyama/study-cedar/internal/iputil"
 	"github.com/ksakiyama/study-cedar/internal/models"
 )
 
@@ -60,12 +61,18 @@ func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get IP address information
+	ipInfo := iputil.GetIPInfo(r)
+
 	// Check authorization
 	authorized, err := h.authorizer.Authorize(cedar.AuthzRequest{
-		UserID:     userID,
-		UserRole:   userRole,
-		Action:     "ListDocuments",
-		ResourceID: "documents",
+		UserID:      userID,
+		UserRole:    userRole,
+		Action:      "ListDocuments",
+		ResourceID:  "documents",
+		IPAddress:   ipInfo.IPAddress,
+		IsPrivateIP: ipInfo.IsPrivateIP,
+		IsJapanIP:   ipInfo.IsJapanIP,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -73,7 +80,7 @@ func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !authorized {
-		respondError(w, http.StatusForbidden, "Access denied")
+		respondError(w, http.StatusForbidden, "Access denied: Geographic restriction or insufficient permissions")
 		return
 	}
 
@@ -133,6 +140,9 @@ func (h *Handler) GetDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get IP address information
+	ipInfo := iputil.GetIPInfo(r)
+
 	// Check authorization
 	authorized, err := h.authorizer.Authorize(cedar.AuthzRequest{
 		UserID:          userID,
@@ -140,6 +150,9 @@ func (h *Handler) GetDocument(w http.ResponseWriter, r *http.Request) {
 		Action:          "GetDocument",
 		ResourceID:      documentID,
 		ResourceOwnerID: doc.OwnerID,
+		IPAddress:       ipInfo.IPAddress,
+		IsPrivateIP:     ipInfo.IsPrivateIP,
+		IsJapanIP:       ipInfo.IsJapanIP,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -147,7 +160,7 @@ func (h *Handler) GetDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !authorized {
-		respondError(w, http.StatusForbidden, "Access denied")
+		respondError(w, http.StatusForbidden, "Access denied: Geographic restriction or insufficient permissions")
 		return
 	}
 
@@ -164,12 +177,18 @@ func (h *Handler) CreateDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get IP address information
+	ipInfo := iputil.GetIPInfo(r)
+
 	// Check authorization
 	authorized, err := h.authorizer.Authorize(cedar.AuthzRequest{
-		UserID:     userID,
-		UserRole:   userRole,
-		Action:     "CreateDocument",
-		ResourceID: "documents",
+		UserID:      userID,
+		UserRole:    userRole,
+		Action:      "CreateDocument",
+		ResourceID:  "documents",
+		IPAddress:   ipInfo.IPAddress,
+		IsPrivateIP: ipInfo.IsPrivateIP,
+		IsJapanIP:   ipInfo.IsJapanIP,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -177,7 +196,7 @@ func (h *Handler) CreateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !authorized {
-		respondError(w, http.StatusForbidden, "Access denied")
+		respondError(w, http.StatusForbidden, "Access denied: Geographic restriction or insufficient permissions")
 		return
 	}
 
@@ -239,6 +258,9 @@ func (h *Handler) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get IP address information
+	ipInfo := iputil.GetIPInfo(r)
+
 	// Check authorization
 	authorized, err := h.authorizer.Authorize(cedar.AuthzRequest{
 		UserID:          userID,
@@ -246,6 +268,9 @@ func (h *Handler) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 		Action:          "UpdateDocument",
 		ResourceID:      documentID,
 		ResourceOwnerID: doc.OwnerID,
+		IPAddress:       ipInfo.IPAddress,
+		IsPrivateIP:     ipInfo.IsPrivateIP,
+		IsJapanIP:       ipInfo.IsJapanIP,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -253,7 +278,7 @@ func (h *Handler) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !authorized {
-		respondError(w, http.StatusForbidden, "Access denied")
+		respondError(w, http.StatusForbidden, "Access denied: Geographic restriction or insufficient permissions")
 		return
 	}
 
@@ -311,6 +336,9 @@ func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get IP address information
+	ipInfo := iputil.GetIPInfo(r)
+
 	// Check authorization
 	authorized, err := h.authorizer.Authorize(cedar.AuthzRequest{
 		UserID:          userID,
@@ -318,6 +346,9 @@ func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 		Action:          "DeleteDocument",
 		ResourceID:      documentID,
 		ResourceOwnerID: doc.OwnerID,
+		IPAddress:       ipInfo.IPAddress,
+		IsPrivateIP:     ipInfo.IsPrivateIP,
+		IsJapanIP:       ipInfo.IsJapanIP,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -325,7 +356,7 @@ func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !authorized {
-		respondError(w, http.StatusForbidden, "Access denied")
+		respondError(w, http.StatusForbidden, "Access denied: Geographic restriction or insufficient permissions")
 		return
 	}
 
