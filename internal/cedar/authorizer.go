@@ -30,7 +30,7 @@ func NewAuthorizer() (*Authorizer, error) {
 }
 
 // IsAuthorized checks if a user is authorized to perform an action on a resource
-func (a *Authorizer) IsAuthorized(userID, userRole, action, resourceID, resourceOwnerID, ipAddress string, isPrivateIP, isJapanIP bool) (bool, error) {
+func (a *Authorizer) IsAuthorized(userID, userRole, action, resourceID, resourceOwnerID, ipAddress string, isPrivateIP, isJapanIP, hasGroupAccess bool) (bool, error) {
 	// Create principal (user)
 	principal := cedar.NewEntityUID(cedar.EntityType("DocumentApp::User"), cedar.String(userID))
 
@@ -83,11 +83,12 @@ func (a *Authorizer) IsAuthorized(userID, userRole, action, resourceID, resource
 		return false, fmt.Errorf("failed to unmarshal entities: %w", err)
 	}
 
-	// Create context with IP information
+	// Create context with IP information and group access
 	contextMap := cedar.RecordMap{
-		"ip_address":    cedar.String(ipAddress),
-		"is_private_ip": cedar.Boolean(isPrivateIP),
-		"is_japan_ip":   cedar.Boolean(isJapanIP),
+		"ip_address":       cedar.String(ipAddress),
+		"is_private_ip":    cedar.Boolean(isPrivateIP),
+		"is_japan_ip":      cedar.Boolean(isJapanIP),
+		"has_group_access": cedar.Boolean(hasGroupAccess),
 	}
 
 	// Create request
@@ -114,9 +115,10 @@ type AuthzRequest struct {
 	IPAddress       string
 	IsPrivateIP     bool
 	IsJapanIP       bool
+	HasGroupAccess  bool
 }
 
 // Authorize is a convenience method for authorization
 func (a *Authorizer) Authorize(req AuthzRequest) (bool, error) {
-	return a.IsAuthorized(req.UserID, req.UserRole, req.Action, req.ResourceID, req.ResourceOwnerID, req.IPAddress, req.IsPrivateIP, req.IsJapanIP)
+	return a.IsAuthorized(req.UserID, req.UserRole, req.Action, req.ResourceID, req.ResourceOwnerID, req.IPAddress, req.IsPrivateIP, req.IsJapanIP, req.HasGroupAccess)
 }

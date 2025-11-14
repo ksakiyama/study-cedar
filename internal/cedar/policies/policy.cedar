@@ -10,7 +10,7 @@ unless {
     context.is_japan_ip || context.is_private_ip
 };
 
-// Policy 1: Admins can perform all operations
+// Policy 1: Admins can perform all operations (bypasses group restrictions)
 permit(
     principal,
     action,
@@ -20,7 +20,7 @@ when {
     principal.role == "admin"
 };
 
-// Policy 2: Editors can list, view, create, and update documents
+// Policy 2: Editors with group access can list, view, create, and update documents
 permit(
     principal,
     action in [
@@ -32,10 +32,11 @@ permit(
     resource
 )
 when {
-    principal.role == "editor"
+    principal.role == "editor" &&
+    context.has_group_access
 };
 
-// Policy 3: Viewers can only list and view documents
+// Policy 3: Viewers with group access can only list and view documents
 permit(
     principal,
     action in [
@@ -45,7 +46,8 @@ permit(
     resource
 )
 when {
-    principal.role == "viewer"
+    principal.role == "viewer" &&
+    context.has_group_access
 };
 
 // Policy 4: Document owners can delete their own documents

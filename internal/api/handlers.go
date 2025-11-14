@@ -34,6 +34,29 @@ func (h *Handler) SetShuttingDown(shuttingDown bool) {
 	h.isShuttingDown.Store(shuttingDown)
 }
 
+// checkGroupAccess checks if a user group has access to a document group
+func (h *Handler) checkGroupAccess(userGroupID, documentGroupID string) bool {
+	// If either group ID is empty, no group access
+	if userGroupID == "" || documentGroupID == "" {
+		return false
+	}
+
+	// Check if association exists
+	var exists bool
+	err := h.db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM group_associations
+			WHERE user_group_id = $1 AND document_group_id = $2
+		)
+	`, userGroupID, documentGroupID).Scan(&exists)
+
+	if err != nil {
+		return false
+	}
+
+	return exists
+}
+
 // HealthCheck handles health check requests
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	// If server is shutting down, return 503 Service Unavailable
@@ -55,6 +78,7 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-ID")
 	userRole := r.Header.Get("X-User-Role")
+	userGroupID := r.Header.Get("X-User-Group-ID")
 
 	if userID == "" || userRole == "" {
 		respondError(w, http.StatusBadRequest, "Missing user headers")
@@ -64,15 +88,16 @@ func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	// Get IP address information
 	ipInfo := iputil.GetIPInfo(r)
 
-	// Check authorization
+	// Check basic authorization (for listing, we set has_group_access to true for role-based check)
 	authorized, err := h.authorizer.Authorize(cedar.AuthzRequest{
-		UserID:      userID,
-		UserRole:    userRole,
-		Action:      "ListDocuments",
-		ResourceID:  "documents",
-		IPAddress:   ipInfo.IPAddress,
-		IsPrivateIP: ipInfo.IsPrivateIP,
-		IsJapanIP:   ipInfo.IsJapanIP,
+		UserID:         userID,
+		UserRole:       userRole,
+		Action:         "ListDocuments",
+		ResourceID:     "documents",
+		IPAddress:      ipInfo.IPAddress,
+		IsPrivateIP:    ipInfo.IsPrivateIP,
+		IsJapanIP:      ipInfo.IsJapanIP,
+		HasGroupAccess: true, // For list operation, check role only
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -84,12 +109,33 @@ func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch documents from database
-	rows, err := h.db.Query(`
-		SELECT id, title, content, owner_id, created_at, updated_at
-		FROM documents
-		ORDER BY created_at DESC
-	`)
+	// Fetch documents from database with group filtering
+	var rows *sql.Rows
+	if userRole == "admin" {
+		// Admins can see all documents
+		rows, err = h.db.Query(`
+			SELECT id, title, content, owner_id, document_group_id, created_at, updated_at
+			FROM documents
+			ORDER BY created_at DESC
+		`)
+	} else if userGroupID != "" {
+		// Users with group: only show documents from associated groups
+		rows, err = h.db.Query(`
+			SELECT d.id, d.title, d.content, d.owner_id, d.document_group_id, d.created_at, d.updated_at
+			FROM documents d
+			LEFT JOIN group_associations ga ON d.document_group_id = ga.document_group_id
+			WHERE ga.user_group_id = $1 OR d.document_group_id IS NULL
+			ORDER BY d.created_at DESC
+		`, userGroupID)
+	} else {
+		// Users without group: only show documents without group
+		rows, err = h.db.Query(`
+			SELECT id, title, content, owner_id, document_group_id, created_at, updated_at
+			FROM documents
+			WHERE document_group_id IS NULL
+			ORDER BY created_at DESC
+		`)
+	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
 		return
@@ -99,7 +145,7 @@ func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	documents := []models.Document{}
 	for rows.Next() {
 		var doc models.Document
-		if err := rows.Scan(&doc.ID, &doc.Title, &doc.Content, &doc.OwnerID, &doc.CreatedAt, &doc.UpdatedAt); err != nil {
+		if err := rows.Scan(&doc.ID, &doc.Title, &doc.Content, &doc.OwnerID, &doc.DocumentGroupID, &doc.CreatedAt, &doc.UpdatedAt); err != nil {
 			respondError(w, http.StatusInternalServerError, fmt.Sprintf("Scan error: %v", err))
 			return
 		}
@@ -117,19 +163,20 @@ func (h *Handler) GetDocument(w http.ResponseWriter, r *http.Request) {
 	documentID := chi.URLParam(r, "documentId")
 	userID := r.Header.Get("X-User-ID")
 	userRole := r.Header.Get("X-User-Role")
+	userGroupID := r.Header.Get("X-User-Group-ID")
 
 	if userID == "" || userRole == "" {
 		respondError(w, http.StatusBadRequest, "Missing user headers")
 		return
 	}
 
-	// Fetch document to get owner
+	// Fetch document to get owner and group
 	var doc models.Document
 	err := h.db.QueryRow(`
-		SELECT id, title, content, owner_id, created_at, updated_at
+		SELECT id, title, content, owner_id, document_group_id, created_at, updated_at
 		FROM documents
 		WHERE id = $1
-	`, documentID).Scan(&doc.ID, &doc.Title, &doc.Content, &doc.OwnerID, &doc.CreatedAt, &doc.UpdatedAt)
+	`, documentID).Scan(&doc.ID, &doc.Title, &doc.Content, &doc.OwnerID, &doc.DocumentGroupID, &doc.CreatedAt, &doc.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "Document not found")
@@ -138,6 +185,15 @@ func (h *Handler) GetDocument(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
 		return
+	}
+
+	// Check group access
+	hasGroupAccess := false
+	if doc.DocumentGroupID.Valid {
+		hasGroupAccess = h.checkGroupAccess(userGroupID, doc.DocumentGroupID.String)
+	} else {
+		// Document has no group, allow access
+		hasGroupAccess = true
 	}
 
 	// Get IP address information
@@ -153,6 +209,7 @@ func (h *Handler) GetDocument(w http.ResponseWriter, r *http.Request) {
 		IPAddress:       ipInfo.IPAddress,
 		IsPrivateIP:     ipInfo.IsPrivateIP,
 		IsJapanIP:       ipInfo.IsJapanIP,
+		HasGroupAccess:  hasGroupAccess,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -180,15 +237,16 @@ func (h *Handler) CreateDocument(w http.ResponseWriter, r *http.Request) {
 	// Get IP address information
 	ipInfo := iputil.GetIPInfo(r)
 
-	// Check authorization
+	// Check authorization (for creation, use role-based access only)
 	authorized, err := h.authorizer.Authorize(cedar.AuthzRequest{
-		UserID:      userID,
-		UserRole:    userRole,
-		Action:      "CreateDocument",
-		ResourceID:  "documents",
-		IPAddress:   ipInfo.IPAddress,
-		IsPrivateIP: ipInfo.IsPrivateIP,
-		IsJapanIP:   ipInfo.IsJapanIP,
+		UserID:         userID,
+		UserRole:       userRole,
+		Action:         "CreateDocument",
+		ResourceID:     "documents",
+		IPAddress:      ipInfo.IPAddress,
+		IsPrivateIP:    ipInfo.IsPrivateIP,
+		IsJapanIP:      ipInfo.IsJapanIP,
+		HasGroupAccess: true, // For creation, check role only
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -235,19 +293,20 @@ func (h *Handler) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 	documentID := chi.URLParam(r, "documentId")
 	userID := r.Header.Get("X-User-ID")
 	userRole := r.Header.Get("X-User-Role")
+	userGroupID := r.Header.Get("X-User-Group-ID")
 
 	if userID == "" || userRole == "" {
 		respondError(w, http.StatusBadRequest, "Missing user headers")
 		return
 	}
 
-	// Fetch document to get owner
+	// Fetch document to get owner and group
 	var doc models.Document
 	err := h.db.QueryRow(`
-		SELECT id, title, content, owner_id, created_at, updated_at
+		SELECT id, title, content, owner_id, document_group_id, created_at, updated_at
 		FROM documents
 		WHERE id = $1
-	`, documentID).Scan(&doc.ID, &doc.Title, &doc.Content, &doc.OwnerID, &doc.CreatedAt, &doc.UpdatedAt)
+	`, documentID).Scan(&doc.ID, &doc.Title, &doc.Content, &doc.OwnerID, &doc.DocumentGroupID, &doc.CreatedAt, &doc.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "Document not found")
@@ -256,6 +315,14 @@ func (h *Handler) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
 		return
+	}
+
+	// Check group access
+	hasGroupAccess := false
+	if doc.DocumentGroupID.Valid {
+		hasGroupAccess = h.checkGroupAccess(userGroupID, doc.DocumentGroupID.String)
+	} else {
+		hasGroupAccess = true
 	}
 
 	// Get IP address information
@@ -271,6 +338,7 @@ func (h *Handler) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 		IPAddress:       ipInfo.IPAddress,
 		IsPrivateIP:     ipInfo.IsPrivateIP,
 		IsJapanIP:       ipInfo.IsJapanIP,
+		HasGroupAccess:  hasGroupAccess,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))
@@ -313,19 +381,20 @@ func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 	documentID := chi.URLParam(r, "documentId")
 	userID := r.Header.Get("X-User-ID")
 	userRole := r.Header.Get("X-User-Role")
+	userGroupID := r.Header.Get("X-User-Group-ID")
 
 	if userID == "" || userRole == "" {
 		respondError(w, http.StatusBadRequest, "Missing user headers")
 		return
 	}
 
-	// Fetch document to get owner
+	// Fetch document to get owner and group
 	var doc models.Document
 	err := h.db.QueryRow(`
-		SELECT id, owner_id
+		SELECT id, owner_id, document_group_id
 		FROM documents
 		WHERE id = $1
-	`, documentID).Scan(&doc.ID, &doc.OwnerID)
+	`, documentID).Scan(&doc.ID, &doc.OwnerID, &doc.DocumentGroupID)
 
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "Document not found")
@@ -334,6 +403,14 @@ func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
 		return
+	}
+
+	// Check group access
+	hasGroupAccess := false
+	if doc.DocumentGroupID.Valid {
+		hasGroupAccess = h.checkGroupAccess(userGroupID, doc.DocumentGroupID.String)
+	} else {
+		hasGroupAccess = true
 	}
 
 	// Get IP address information
@@ -349,6 +426,7 @@ func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 		IPAddress:       ipInfo.IPAddress,
 		IsPrivateIP:     ipInfo.IsPrivateIP,
 		IsJapanIP:       ipInfo.IsJapanIP,
+		HasGroupAccess:  hasGroupAccess,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Authorization error: %v", err))

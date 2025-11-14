@@ -2,14 +2,20 @@
 
 namespace DocumentApp {
     // Entity type: User
-    entity User = {
+    entity User in [UserGroup] = {
         "role": String,
     };
 
+    // Entity type: UserGroup
+    entity UserGroup;
+
     // Entity type: Document
-    entity Document = {
+    entity Document in [DocumentGroup] = {
         "owner": User,
     };
+
+    // Entity type: DocumentGroup
+    entity DocumentGroup;
 
     // Actions: Document operations
     action "ListDocuments",
@@ -18,12 +24,13 @@ namespace DocumentApp {
            "UpdateDocument",
            "DeleteDocument"
     appliesTo {
-        principal: [User],
-        resource: [Document],
+        principal: [User, UserGroup],
+        resource: [Document, DocumentGroup],
         context: {
             "ip_address": String,
             "is_private_ip": Bool,
             "is_japan_ip": Bool,
+            "has_group_access": Bool,
         }
     };
 }
