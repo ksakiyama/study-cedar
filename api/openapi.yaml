@@ -1,0 +1,285 @@
+openapi: 3.0.3
+info:
+  title: Cedar Sample Document Management API
+  description: |-
+    AWS Cedarを使用したアクセス制御のサンプルAPI
+    ドキュメント管理システムを通じて、Cedarのポリシーベース認可を学習できます。
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+tags:
+  - name: documents
+    description: ドキュメント管理
+  - name: health
+    description: ヘルスチェック
+
+paths:
+  /health:
+    get:
+      tags:
+        - health
+      summary: ヘルスチェック
+      operationId: healthCheck
+      responses:
+        '200':
+          description: 正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /documents:
+    get:
+      tags:
+        - documents
+      summary: ドキュメント一覧取得
+      operationId: listDocuments
+      parameters:
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+          description: ユーザーID
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [admin, editor, viewer]
+          description: ユーザーロール
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+        '403':
+          description: アクセス拒否
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - documents
+      summary: ドキュメント作成
+      operationId: createDocument
+      parameters:
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [admin, editor, viewer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentInput'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '403':
+          description: アクセス拒否
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /documents/{documentId}:
+    get:
+      tags:
+        - documents
+      summary: ドキュメント取得
+      operationId: getDocument
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [admin, editor, viewer]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '403':
+          description: アクセス拒否
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - documents
+      summary: ドキュメント更新
+      operationId: updateDocument
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [admin, editor, viewer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentInput'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '403':
+          description: アクセス拒否
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - documents
+      summary: ドキュメント削除
+      operationId: deleteDocument
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [admin, editor, viewer]
+      responses:
+        '204':
+          description: 削除成功
+        '403':
+          description: アクセス拒否
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "doc-123"
+        title:
+          type: string
+          example: "サンプルドキュメント"
+        content:
+          type: string
+          example: "これはサンプルドキュメントの内容です"
+        owner_id:
+          type: string
+          example: "user-1"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DocumentInput:
+      type: object
+      required:
+        - title
+        - content
+      properties:
+        title:
+          type: string
+          example: "新しいドキュメント"
+        content:
+          type: string
+          example: "ドキュメントの内容"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "アクセスが拒否されました"
+        message:
+          type: string
+          example: "このリソースにアクセスする権限がありません"
