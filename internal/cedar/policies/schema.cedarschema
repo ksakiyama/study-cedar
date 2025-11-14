@@ -1,17 +1,17 @@
 // Cedar Schema for Document Management System
 
 namespace DocumentApp {
-    // エンティティタイプ: ユーザー
+    // Entity type: User
     entity User = {
         "role": String,
     };
 
-    // エンティティタイプ: ドキュメント
+    // Entity type: Document
     entity Document = {
         "owner": User,
     };
 
-    // アクション: ドキュメント操作
+    // Actions: Document operations
     action "ListDocuments",
            "GetDocument",
            "CreateDocument",

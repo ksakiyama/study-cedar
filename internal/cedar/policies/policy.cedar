@@ -1,6 +1,6 @@
 // Cedar Policies for Document Management System
 
-// ポリシー0: 地理的制限 - 日本国内IPまたはプライベートIPのみアクセス許可
+// Policy 0: Geographic restriction - Allow access only from Japan IPs or private IPs
 forbid(
     principal,
     action,
@@ -10,7 +10,7 @@ unless {
     context.is_japan_ip || context.is_private_ip
 };
 
-// ポリシー1: 管理者は全ての操作が可能
+// Policy 1: Admins can perform all operations
 permit(
     principal,
     action,
@@ -20,7 +20,7 @@ when {
     principal.role == "admin"
 };
 
-// ポリシー2: エディターはドキュメントの一覧表示、取得、作成、更新が可能
+// Policy 2: Editors can list, view, create, and update documents
 permit(
     principal,
     action in [
@@ -35,7 +35,7 @@ when {
     principal.role == "editor"
 };
 
-// ポリシー3: 閲覧者はドキュメントの一覧表示と取得のみ可能
+// Policy 3: Viewers can only list and view documents
 permit(
     principal,
     action in [
@@ -48,7 +48,7 @@ when {
     principal.role == "viewer"
 };
 
-// ポリシー4: ドキュメントのオーナーは自分のドキュメントを削除可能
+// Policy 4: Document owners can delete their own documents
 permit(
     principal,
     action == DocumentApp::Action::"DeleteDocument",

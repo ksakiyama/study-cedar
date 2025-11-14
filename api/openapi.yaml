@@ -2,27 +2,27 @@ openapi: 3.0.3
 info:
   title: Cedar Sample Document Management API
   description: |-
-    AWS Cedarを使用したアクセス制御のサンプルAPI
-    ドキュメント管理システムを通じて、Cedarのポリシーベース認可を学習できます。
+    Sample API demonstrating access control using AWS Cedar.
+    Learn policy-based authorization through a document management system.
   version: 1.0.0
 servers:
   - url: http://localhost:8080/api/v1
 tags:
   - name: documents
-    description: ドキュメント管理
+    description: Document management
   - name: health
-    description: ヘルスチェック
+    description: Health check
 
 paths:
   /health:
     get:
       tags:
         - health
-      summary: ヘルスチェック
+      summary: Health check
       operationId: healthCheck
       responses:
         '200':
-          description: 正常
+          description: Success
           content:
             application/json:
               schema:
@@ -36,7 +36,7 @@ paths:
     get:
       tags:
         - documents
-      summary: ドキュメント一覧取得
+      summary: List documents
       operationId: listDocuments
       parameters:
         - name: X-User-ID
@@ -44,17 +44,17 @@ paths:
           required: true
           schema:
             type: string
-          description: ユーザーID
+          description: User ID
         - name: X-User-Role
           in: header
           required: true
           schema:
             type: string
             enum: [admin, editor, viewer]
-          description: ユーザーロール
+          description: User role
       responses:
         '200':
-          description: 成功
+          description: Success
           content:
             application/json:
               schema:
@@ -65,7 +65,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/Document'
         '403':
-          description: アクセス拒否
+          description: Access denied
           content:
             application/json:
               schema:
@@ -74,7 +74,7 @@ paths:
     post:
       tags:
         - documents
-      summary: ドキュメント作成
+      summary: Create document
       operationId: createDocument
       parameters:
         - name: X-User-ID
@@ -96,13 +96,13 @@ paths:
               $ref: '#/components/schemas/DocumentInput'
       responses:
         '201':
-          description: 作成成功
+          description: Created successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Document'
         '403':
-          description: アクセス拒否
+          description: Access denied
           content:
             application/json:
               schema:
@@ -112,7 +112,7 @@ paths:
     get:
       tags:
         - documents
-      summary: ドキュメント取得
+      summary: Get document
       operationId: getDocument
       parameters:
         - name: documentId
@@ -133,19 +133,19 @@ paths:
             enum: [admin, editor, viewer]
       responses:
         '200':
-          description: 成功
+          description: Success
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Document'
         '403':
-          description: アクセス拒否
+          description: Access denied
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: 見つかりません
+          description: Not found
           content:
             application/json:
               schema:
@@ -154,7 +154,7 @@ paths:
     put:
       tags:
         - documents
-      summary: ドキュメント更新
+      summary: Update document
       operationId: updateDocument
       parameters:
         - name: documentId
@@ -181,19 +181,19 @@ paths:
               $ref: '#/components/schemas/DocumentInput'
       responses:
         '200':
-          description: 更新成功
+          description: Updated successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Document'
         '403':
-          description: アクセス拒否
+          description: Access denied
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: 見つかりません
+          description: Not found
           content:
             application/json:
               schema:
@@ -202,7 +202,7 @@ paths:
     delete:
       tags:
         - documents
-      summary: ドキュメント削除
+      summary: Delete document
       operationId: deleteDocument
       parameters:
         - name: documentId
@@ -223,15 +223,15 @@ paths:
             enum: [admin, editor, viewer]
       responses:
         '204':
-          description: 削除成功
+          description: Deleted successfully
         '403':
-          description: アクセス拒否
+          description: Access denied
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: 見つかりません
+          description: Not found
           content:
             application/json:
               schema:
@@ -247,10 +247,10 @@ components:
           example: "doc-123"
         title:
           type: string
-          example: "サンプルドキュメント"
+          example: "Sample Document"
         content:
           type: string
-          example: "これはサンプルドキュメントの内容です"
+          example: "This is sample document content"
         owner_id:
           type: string
           example: "user-1"
@@ -269,17 +269,17 @@ components:
       properties:
         title:
           type: string
-          example: "新しいドキュメント"
+          example: "New Document"
         content:
           type: string
-          example: "ドキュメントの内容"
+          example: "Document content"
 
     Error:
       type: object
       properties:
         error:
           type: string
-          example: "アクセスが拒否されました"
+          example: "Access denied"
         message:
           type: string
-          example: "このリソースにアクセスする権限がありません"
+          example: "You do not have permission to access this resource"
